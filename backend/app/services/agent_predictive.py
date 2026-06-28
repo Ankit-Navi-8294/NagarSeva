@@ -3,44 +3,71 @@ import google.generativeai as genai
 from datetime import datetime, timezone
 import uuid
 from app.core.config import db
+from collections import defaultdict
 
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "YOUR_GEMINI_API_KEY")
 genai.configure(api_key=GEMINI_API_KEY)
 model = genai.GenerativeModel('gemini-1.5-pro')
 
-def get_mock_bigquery_data():
-    """Returns mock historical data for 3 years (aggregated by month and location)"""
-    return [
-        {"ward": "Ward 12", "month": "June", "type": "Waterlogging", "count_2023": 15, "count_2024": 18, "count_2025": 14},
-        {"ward": "Ward 12", "month": "July", "type": "Pothole", "count_2023": 40, "count_2024": 45, "count_2025": 50},
-        {"ward": "Ward 8", "month": "June", "type": "Garbage", "count_2023": 5, "count_2024": 4, "count_2025": 6},
-    ]
+def get_real_issue_data():
+    """Aggregates real data from Firestore by city and type"""
+    if not db:
+        return []
+    
+    try:
+        issues = db.collection("issues").stream()
+        
+        # Group by City -> Type -> Count
+        # Structure: {"Mumbai": {"Pothole": 15, "Garbage": 5}, "Belagavi": {...}}
+        city_stats = defaultdict(lambda: defaultdict(int))
+        
+        for doc in issues:
+            data = doc.to_dict()
+            city = data.get("city") or "Unknown City"
+            issue_type = data.get("type") or "Other"
+            city_stats[city][issue_type] += 1
+            
+        # Format for prompt
+        formatted_data = []
+        for city, types in city_stats.items():
+            for t, count in types.items():
+                formatted_data.append({"city": city, "type": t, "recent_count": count})
+                
+        return formatted_data
+    except Exception as e:
+        print(f"Error fetching data for predictive engine: {e}")
+        return []
 
 def run_predictive_engine():
     """
     Agent 4: Predictive Hotspots Engine
-    Queries historical data (BigQuery Mock) and uses Gemini to generate a natural language forecast.
+    Queries historical data and uses Gemini to generate a natural language forecast.
     """
-    data = get_mock_bigquery_data()
+    data = get_real_issue_data()
+    
+    if not data:
+        data = [{"city": "Sample City", "type": "Pothole", "recent_count": 10}] # Fallback
+        
+    current_month = datetime.now(timezone.utc).strftime("%B %Y")
     
     prompt = f"""
-    You are an AI predictive analyst for the NagarSeva platform in Belagavi.
-    Analyze the following historical civic issue data spanning 3 years:
+    You are an AI predictive analyst for the NagarSeva platform — a civic issue reporting app covering all cities in India.
+    Analyze the following recent civic issue data across various cities:
     {data}
     
-    Current Month: June 2026.
+    Current Month: {current_month}.
     
     Task:
-    1. Identify the highest risk areas (hotspots) for the upcoming months based on the trends.
-    2. Write a concise, 2-3 sentence natural language forecast that a Ward Officer can quickly read.
-    3. Example: 'Ward X has had 12 waterlogging reports every June-July for 3 years. High risk this monsoon.'
+    1. Identify the highest risk areas (hotspots) for the upcoming weeks based on the city data provided.
+    2. Write a concise, 2-3 sentence natural language forecast that a City Officer can quickly read.
+    3. Example: 'Mumbai has had 12 waterlogging reports recently. High risk this monsoon.'
     
     Provide ONLY the natural language forecast.
     """
     
     try:
         if GEMINI_API_KEY == "YOUR_GEMINI_API_KEY":
-            forecast_text = "Ward 12 has shown a consistent increase in Pothole reports during June-July over the last 3 years, averaging 45+ cases. High risk of severe road damage expected this monsoon."
+            forecast_text = f"Based on recent data, {data[0]['city']} has shown a consistent increase in {data[0]['type']} reports. High risk of severe issues expected soon. (Mock Forecast)"
         else:
             response = model.generate_content(prompt)
             forecast_text = response.text.strip()
@@ -52,18 +79,17 @@ def run_predictive_engine():
             "agent_name": "Predictive_Hotspot_Engine",
             "run_at": now.isoformat(),
             "forecast_generated": forecast_text,
-            "actions_taken": ["Generated predictive hotspot forecast for June 2026"],
+            "actions_taken": [f"Generated predictive hotspot forecast for {current_month}"],
             "errors": []
         }
         
         if db:
             db.collection("agent_logs").document(log_entry["id"]).set(log_entry)
             
-            # Save the forecast itself to a forecasts collection for the dashboard
             db.collection("forecasts").add({
                 "generated_at": now.isoformat(),
                 "forecast_text": forecast_text,
-                "target_month": "June 2026"
+                "target_month": current_month
             })
             
         return {

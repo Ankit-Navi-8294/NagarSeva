@@ -7,6 +7,7 @@ import Report from './pages/Report';
 import MapViewer from './pages/MapViewer';
 import ImpactDashboard from './pages/Impact';
 import Profile from './pages/Profile';
+import Admin from './pages/Admin';
 
 // Protected Route Component
 const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -37,11 +38,7 @@ function App() {
       />
       <Route 
         path="/report" 
-        element={
-          <ProtectedRoute>
-            <Report />
-          </ProtectedRoute>
-        } 
+        element={<Report />} 
       />
       <Route 
         path="/map" 
@@ -64,6 +61,10 @@ function App() {
             <Profile />
           </ProtectedRoute>
         } 
+      />
+      <Route 
+        path="/admin" 
+        element={<Admin />} 
       />
       {/* Add more routes here later */}
     </Routes>

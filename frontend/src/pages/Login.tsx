@@ -122,20 +122,33 @@ const Login: React.FC = () => {
           </form>
         )}
         
-        {/* Dev Bypass for testing */}
-        <button 
-          onClick={() => {
-            // Force bypass via mock user
-            (window as any)._bypassAuth = true;
-            navigate('/');
-          }} 
-          style={{ marginTop: '2rem', padding: '0.5rem', width: '100%', border: '1px dashed #ccc', background: 'transparent' }}
-        >
-          [DEV] Bypass Login
-        </button>
+        {/* Quick Access */}
+        <div style={{ marginTop: '2rem', paddingTop: '1rem', borderTop: '1px solid var(--neutral-200)' }}>
+          <p style={{ textAlign: 'center', color: 'var(--text-secondary)', marginBottom: '1rem', fontSize: '0.875rem', fontWeight: 500 }}>Quick Access</p>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+            <button onClick={() => navigate('/report')} className="btn w-full" style={{ padding: '0.75rem', backgroundColor: 'var(--primary-50)', color: 'var(--primary-700)', border: '1px solid var(--primary-200)', borderRadius: 'var(--radius-md)', fontWeight: 600 }}>
+              Report Issue (Anonymous)
+            </button>
+            <button onClick={() => navigate('/admin')} className="btn w-full" style={{ padding: '0.75rem', backgroundColor: 'var(--neutral-100)', color: 'var(--neutral-700)', border: '1px solid var(--neutral-200)', borderRadius: 'var(--radius-md)', fontWeight: 600 }}>
+              Admin Dashboard
+            </button>
+            
+            {/* Dev Bypass for testing */}
+            <button 
+              onClick={() => {
+                (window as any)._bypassAuth = true;
+                navigate('/');
+              }} 
+              style={{ marginTop: '1rem', padding: '0.5rem', width: '100%', border: '1px dashed #ccc', background: 'transparent', fontSize: '0.75rem', color: 'var(--text-secondary)' }}
+            >
+              [DEV] Bypass Login
+            </button>
+          </div>
+        </div>
       </div>
     </div>
   );
 };
 
 export default Login;
+

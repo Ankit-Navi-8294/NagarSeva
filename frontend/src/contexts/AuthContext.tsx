@@ -22,34 +22,36 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    let timeoutId: NodeJS.Timeout;
-    
-    // Attempt to connect to real Firebase Auth.
+    let timeoutId: ReturnType<typeof setTimeout>;
+    let authResolved = false;
+
     try {
       const unsubscribe = onAuthStateChanged(auth, (user) => {
+        authResolved = true;
         setUser(user);
         setLoading(false);
       });
-      
+
       // Fallback timeout in case Firebase is unreachable or blocked
+      // Uses a flag variable (not `loading` state) to avoid stale closure
       timeoutId = setTimeout(() => {
-        if (loading) {
+        if (!authResolved) {
           console.warn("Firebase Auth timeout. Bypassing loading state.");
           setLoading(false);
         }
-      }, 2000);
-      
+      }, 3000);
+
       return () => {
         unsubscribe();
         clearTimeout(timeoutId);
       };
     } catch (err) {
       console.error("Firebase auth init error:", err);
-      // Mock auth state for development
       setLoading(false);
       return () => {};
     }
   }, []);
+
 
   const setupRecaptcha = (elementId: string) => {
     try {
