@@ -1,7 +1,7 @@
 from fastapi import APIRouter, HTTPException, BackgroundTasks
 from typing import List
 from app.models.issue import IssueCreate, IssueResponse, AIClassification
-from app.services.agent_vision import classify_issue_from_media
+from app.services.agent_vision import classify_issue_from_media, compress_image_base64
 from app.core.config import db
 from datetime import datetime
 import uuid
@@ -41,17 +41,30 @@ async def create_issue(issue: IssueCreate, background_tasks: BackgroundTasks):
     issue_id = str(uuid.uuid4())
 
     # Strip data URI prefix for storage & AI processing
-    raw_photo_b64 = strip_data_uri(issue.photos[0]) if issue.photos else ""
     media_type = issue.media_type or "image"
 
     # Reconstruct full data URI for Vision Agent (it strips it again internally, so pass original)
     full_media = issue.photos[0] if issue.photos else ""
 
-    ai_result = classify_issue_from_media(
-        media_base64=full_media,
-        media_type=media_type,
-        description=issue.description or ""
-    )
+    try:
+        ai_result = classify_issue_from_media(
+            media_base64=full_media,
+            media_type=media_type,
+            description=issue.description or ""
+        )
+    except Exception as e:
+        print(f"Vision agent error (using fallback): {e}")
+        desc_lower = (issue.description or "").lower()
+        if "pothole" in desc_lower or "road" in desc_lower:
+            ai_result = {"type": "Pothole", "severity": 3, "department": "PWD", "confidence": 0.5, "auto_description": issue.description or "Pothole reported."}
+        elif "water" in desc_lower or "leak" in desc_lower:
+            ai_result = {"type": "Water Leakage", "severity": 3, "department": "BWSSB", "confidence": 0.5, "auto_description": issue.description or "Water leakage reported."}
+        elif "light" in desc_lower or "street" in desc_lower:
+            ai_result = {"type": "Broken Streetlight", "severity": 3, "department": "BESCOM", "confidence": 0.5, "auto_description": issue.description or "Streetlight issue reported."}
+        elif "garbage" in desc_lower or "waste" in desc_lower:
+            ai_result = {"type": "Garbage", "severity": 3, "department": "BBMP", "confidence": 0.5, "auto_description": issue.description or "Garbage issue reported."}
+        else:
+            ai_result = {"type": "Other", "severity": 3, "department": "Other", "confidence": 0.5, "auto_description": issue.description or "Civic issue reported."}
 
     ai_class = AIClassification(
         type=ai_result.get("type", "Other"),
@@ -61,8 +74,14 @@ async def create_issue(issue: IssueCreate, background_tasks: BackgroundTasks):
         auto_description=ai_result.get("auto_description", None)
     )
 
-    # Normalize photos: store raw base64 (no data URI prefix) in DB
-    normalized_photos = [strip_data_uri(p) for p in issue.photos if p]
+    # Normalize photos: strip data URI prefix then compress to fit Firestore 1MB limit
+    # For video, skip image compression (PIL cannot handle video frames)
+    if media_type == "image":
+        normalized_photos = [compress_image_base64(strip_data_uri(p)) for p in issue.photos if p]
+    else:
+        # For video: the raw base64 can be tens of MB, far exceeding Firestore's 1MB doc limit.
+        # Store only a small placeholder; the AI has already processed the video.
+        normalized_photos = ["VIDEO_PROCESSED"]
 
     new_issue = IssueResponse(
         id=issue_id,
@@ -90,8 +109,12 @@ async def create_issue(issue: IssueCreate, background_tasks: BackgroundTasks):
         try:
             db.collection("issues").document(issue_id).set(new_issue.model_dump(mode="json"))
         except Exception as e:
-            print(f"Error saving to Firestore: {e}")
-            raise HTTPException(status_code=500, detail="Database Error")
+            error_detail = str(e)
+            print(f"[Firestore ERROR] Failed to save issue {issue_id}: {type(e).__name__}: {error_detail}")
+            raise HTTPException(
+                status_code=500,
+                detail=f"Database Error: {error_detail[:200]}"
+            )
 
     return new_issue
 

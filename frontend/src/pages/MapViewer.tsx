@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { GoogleMap, useJsApiLoader, MarkerClusterer, Marker, HeatmapLayer } from '@react-google-maps/api';
-import { ArrowLeft, Layers, MapPin } from 'lucide-react';
+import { ArrowLeft, Layers } from 'lucide-react';
 import { CENTER_INDIA } from '../lib/dummyData';
 import { fetchIssues, type Issue } from '../lib/api';
 

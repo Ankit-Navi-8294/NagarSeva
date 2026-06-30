@@ -1,7 +1,7 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Camera, Video, MapPin, Mic, X, Check, Loader2 } from 'lucide-react';
-import { createIssue, buildPhotoSrc, type AIClassification } from '../lib/api';
+import { createIssue, type AIClassification } from '../lib/api';
 import { CENTER_INDIA } from '../lib/dummyData';
 import { useAuth } from '../contexts/AuthContext';
 
@@ -24,7 +24,33 @@ const Report: React.FC = () => {
   const imageInputRef = useRef<HTMLInputElement>(null);
   const videoInputRef = useRef<HTMLInputElement>(null);
 
-  const handleMediaCapture = (e: React.ChangeEvent<HTMLInputElement>, type: "image" | "video") => {
+  const compressImage = (file: File, maxWidth: number = 800, quality: number = 0.6): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      const url = URL.createObjectURL(file);
+      img.onload = () => {
+        URL.revokeObjectURL(url);
+        const canvas = document.createElement('canvas');
+        let width = img.width;
+        let height = img.height;
+        if (width > maxWidth) {
+          height = Math.round((height * maxWidth) / width);
+          width = maxWidth;
+        }
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) { reject(new Error('Canvas context failed')); return; }
+        ctx.drawImage(img, 0, 0, width, height);
+        const dataUrl = canvas.toDataURL('image/jpeg', quality);
+        resolve(dataUrl);
+      };
+      img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('Image load failed')); };
+      img.src = url;
+    });
+  };
+
+  const handleMediaCapture = async (e: React.ChangeEvent<HTMLInputElement>, type: "image" | "video") => {
     if (e.target.files && e.target.files[0]) {
       const file = e.target.files[0];
       
@@ -33,14 +59,32 @@ const Report: React.FC = () => {
         return;
       }
       
-      const reader = new FileReader();
-      reader.onload = (ev) => {
-        if (ev.target?.result) {
-          setMedia(ev.target.result as string);
+      if (type === "image") {
+        try {
+          const compressed = await compressImage(file);
+          setMedia(compressed);
           setMediaType(type);
+        } catch {
+          // Fallback to raw read if compression fails
+          const reader = new FileReader();
+          reader.onload = (ev) => {
+            if (ev.target?.result) {
+              setMedia(ev.target.result as string);
+              setMediaType(type);
+            }
+          };
+          reader.readAsDataURL(file);
         }
-      };
-      reader.readAsDataURL(file);
+      } else {
+        const reader = new FileReader();
+        reader.onload = (ev) => {
+          if (ev.target?.result) {
+            setMedia(ev.target.result as string);
+            setMediaType(type);
+          }
+        };
+        reader.readAsDataURL(file);
+      }
     }
   };
 
@@ -129,9 +173,10 @@ const Report: React.FC = () => {
       
       setSubmitPhase('Saved ✓');
       setAiResult(issue.ai_classification || null);
-    } catch (error) {
+    } catch (error: any) {
       console.error(error);
-      alert("Failed to submit issue. Please check the backend connection.");
+      const msg = error?.message || "Unknown error";
+      alert(`Failed to submit: ${msg}`);
       setSubmitting(false);
       setSubmitPhase('');
     }

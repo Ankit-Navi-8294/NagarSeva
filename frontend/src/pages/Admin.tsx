@@ -63,7 +63,10 @@ const Admin: React.FC = () => {
     return (
       <div className="flex items-center justify-center min-h-screen bg-main" style={{ backgroundColor: 'var(--bg-main)' }}>
         <div className="card" style={{ width: '100%', maxWidth: '400px' }}>
-          <h2 style={{ fontSize: '1.25rem', fontWeight: 700, marginBottom: '1rem', textAlign: 'center' }}>Admin Portal Access</h2>
+          <h2 style={{ fontSize: '1.25rem', fontWeight: 700, marginBottom: '0.5rem', textAlign: 'center' }}>Admin Portal Access</h2>
+          <p style={{ fontSize: '0.875rem', color: 'var(--text-secondary)', marginBottom: '1.5rem', textAlign: 'center' }}>
+            For Judges: Use password <code style={{ backgroundColor: 'var(--neutral-100)', padding: '2px 4px', borderRadius: '4px', fontWeight: 600, color: 'var(--primary-600)' }}>nagarseva_admin</code>
+          </p>
           <form onSubmit={handleLogin} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
             <input 
               type="password" 
@@ -174,7 +177,7 @@ const Admin: React.FC = () => {
                 {filteredIssues.map(issue => (
                   <tr key={issue.id} style={{ borderBottom: '1px solid var(--neutral-200)' }}>
                     <td style={{ padding: '1rem', verticalAlign: 'top', width: '200px' }}>
-                      {issue.photos && issue.photos.length > 0 ? (
+                      {issue.photos && issue.photos.length > 0 && issue.photos[0] && issue.photos[0] !== "VIDEO_PROCESSED" ? (
                         issue.media_type === "video" ? (
                           <div style={{ position: 'relative' }}>
                             <video src={issue.photos[0]} controls style={{ width: '100%', borderRadius: 'var(--radius-md)', maxHeight: '120px', backgroundColor: 'black' }} />
@@ -191,8 +194,15 @@ const Admin: React.FC = () => {
                           </div>
                         )
                       ) : (
-                        <div style={{ width: '100%', height: '100px', backgroundColor: 'var(--neutral-100)', borderRadius: 'var(--radius-md)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                          <AlertTriangle color="var(--neutral-400)" />
+                        <div style={{ width: '100%', height: '100px', backgroundColor: 'var(--neutral-100)', borderRadius: 'var(--radius-md)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '4px' }}>
+                          {issue.media_type === "video" ? (
+                            <>
+                              <Video size={24} color="var(--neutral-400)" />
+                              <span style={{ fontSize: '0.7rem', color: 'var(--neutral-400)' }}>Video analyzed by AI</span>
+                            </>
+                          ) : (
+                            <AlertTriangle color="var(--neutral-400)" />
+                          )}
                         </div>
                       )}
                     </td>
@@ -217,8 +227,19 @@ const Admin: React.FC = () => {
                     </td>
                     <td style={{ padding: '1rem', verticalAlign: 'top', width: '250px' }}>
                       <p style={{ fontSize: '0.875rem', fontWeight: 500 }}>{issue.city || "Unknown City"}</p>
-                      <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>{issue.address}</p>
-                      <p style={{ fontSize: '0.75rem', color: 'var(--primary-500)', marginTop: '0.5rem' }}>{issue.lat.toFixed(4)}, {issue.lng.toFixed(4)}</p>
+                      <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>{issue.address || "No address"}</p>
+                      {issue.lat != null && issue.lng != null ? (
+                        <a
+                          href={`https://www.google.com/maps?q=${issue.lat},${issue.lng}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          style={{ fontSize: '0.75rem', color: 'var(--primary-500)', marginTop: '0.5rem', display: 'inline-block', textDecoration: 'underline' }}
+                        >
+                          📍 {issue.lat.toFixed(4)}, {issue.lng.toFixed(4)}
+                        </a>
+                      ) : (
+                        <p style={{ fontSize: '0.75rem', color: 'var(--neutral-400)', marginTop: '0.5rem' }}>No coordinates</p>
+                      )}
                     </td>
                     <td style={{ padding: '1rem', verticalAlign: 'top' }}>
                       <select 

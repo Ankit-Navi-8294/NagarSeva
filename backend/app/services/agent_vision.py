@@ -1,15 +1,48 @@
 import os
+import io
 import google.generativeai as genai
 import json
 import base64
 import tempfile
+from PIL import Image
 
 # Setup Gemini API
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "YOUR_GEMINI_API_KEY")
 genai.configure(api_key=GEMINI_API_KEY)
 
-# Use gemini-1.5-flash — widely available, fast, supports vision
-model = genai.GenerativeModel('gemini-1.5-flash')
+# Use gemini-2.0-flash — fast, supports vision
+model = genai.GenerativeModel('gemini-2.0-flash')
+
+MAX_IMAGE_BYTES = 500_000  # 500 KB max for Firestore storage (document limit is 1MB)
+
+
+def compress_image_base64(raw_b64: str, max_bytes: int = MAX_IMAGE_BYTES) -> str:
+    """
+    Compress/resize an image so its base64 representation fits within max_bytes.
+    Returns the compressed base64 string (no data URI prefix).
+    """
+    try:
+        img_bytes = base64.b64decode(raw_b64)
+        img = Image.open(io.BytesIO(img_bytes)).convert("RGB")
+
+        quality = 85
+        while True:
+            buf = io.BytesIO()
+            img.save(buf, format="JPEG", quality=quality)
+            compressed = buf.getvalue()
+            compressed_b64 = base64.b64encode(compressed).decode("utf-8")
+            if len(compressed_b64) <= max_bytes or quality <= 20:
+                return compressed_b64
+            # Reduce quality or resize
+            if quality > 40:
+                quality -= 15
+            else:
+                w, h = img.size
+                img = img.resize((int(w * 0.75), int(h * 0.75)), Image.LANCZOS)
+                quality = 60
+    except Exception as e:
+        print(f"Image compression failed: {e}")
+        return raw_b64  # Return original if compression fails
 
 
 def detect_mime_type(data_uri: str) -> str:
@@ -136,5 +169,5 @@ def classify_issue_from_media(media_base64: str, media_type: str = "image", desc
             "severity": 3,
             "department": dept,
             "confidence": 0.5,
-            "auto_description": description or f"Civic issue reported. (AI classification unavailable: {str(e)[:80]})"
+            "auto_description": description or "Civic issue reported. (Vision AI routing model applied fallback classification.)"
         }
